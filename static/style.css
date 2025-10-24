@@ -1,0 +1,60 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: #fff;
+  text-align: center;
+  margin: 40px;
+}
+
+h1 {
+  color: #00ffcc;
+  margin-bottom: 20px;
+}
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(9, 40px);
+  grid-template-rows: repeat(9, 40px);
+  justify-content: center;
+  gap: 2px;
+}
+
+input {
+  width: 40px;
+  height: 40px;
+  text-align: center;
+  font-size: 18px;
+  border: 1px solid #444;
+  background: #222;
+  color: #fff;
+}
+
+input:focus {
+  outline: 2px solid #00ffcc;
+}
+
+.buttons {
+  margin: 20px;
+}
+
+button {
+  margin: 5px;
+  padding: 10px 20px;
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  background: #00ffcc;
+  color: #111;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+button:hover {
+  background: #00e0b8;
+}
+
+#message {
+  margin-top: 10px;
+  color: #ffcc00;
+}
+
