@@ -1,62 +1,37 @@
-const boardDiv = document.getElementById("board");
-const message = document.getElementById("message");
-
-for (let i = 0; i < 81; i++) {
-  const input = document.createElement("input");
-  input.maxLength = 1;
-  boardDiv.appendChild(input);
-}
-
-document.getElementById("solve").onclick = async () => {
-  const rows = [];
-  for (let r = 0; r < 9; r++) {
-    let row = "";
-    for (let c = 0; c < 9; c++) {
-      const val = boardDiv.children[r * 9 + c].value.trim();
-      row += val === "" ? "." : val;
-    }
-    rows.push(row);
-  }
-
-  message.textContent = "Solving...";
-
-  const res = await fetch("/solve", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rows }),
-  });
-
-  const data = await res.json();
-
-  if (data.solved) {
-    message.textContent = "✅ Solved!";
-    const solvedBoard = data.board;
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        boardDiv.children[r * 9 + c].value = solvedBoard[r][c];
-      }
-    }
-  } else {
-    message.textContent = "❌ " + data.error;
-  }
-};
-
-document.getElementById("reset").onclick = () => {
-  [...boardDiv.children].forEach(input => input.value = "");
-  message.textContent = "";
-};
-
-document.getElementById("generate").onclick = async () => {
-  message.textContent = "Generating puzzle...";
-  const res = await fetch("/generate");
-  const data = await res.json();
-
-  const puzzle = data.puzzle;
-  for (let r = 0; r < 9; r++) {
-    for (let c = 0; c < 9; c++) {
-      const cell = boardDiv.children[r * 9 + c];
-      cell.value = puzzle[r][c] === 0 ? "" : puzzle[r][c];
-    }
-  }
-  message.textContent = "🧩 Puzzle generated!";
-};
+const boardDiv=document.getElementById('board'),message=document.getElementById('message');
+let level='easy',seconds=0,timerId=null,score=0,hints=3,streak=Number(localStorage.sudokuStreak||0),xp=Number(localStorage.sudokuXP||0),solution=null,initial=null,selected=null,gameActive=false,paused=false,notesMode=false,dailyMode=false;
+let undoStack=[],redoStack=[];const cells=[];
+for(let i=0;i<81;i++){const input=document.createElement('input');input.className='cell';input.maxLength=1;input.inputMode='numeric';input.dataset.index=i;input.setAttribute('aria-label',`Row ${Math.floor(i/9)+1}, Column ${(i%9)+1}`);boardDiv.appendChild(input);cells.push(input);input.addEventListener('focus',()=>selectCell(i));input.addEventListener('input',()=>{if(input.classList.contains('given'))return;input.value=input.value.replace(/[^1-9]/g,'').slice(0,1);highlightPeers(i);if(input.value){score+=2;pushUndo();}updateStats();checkCompletion();});}
+const pad=document.getElementById('numberPad');for(let n=1;n<=9;n++){const b=document.createElement('button');b.textContent=n;b.onclick=()=>selected!==null&&setNumber(n);pad.appendChild(b)}
+function selectCell(i){selected=i;highlightPeers(i)}
+function highlightPeers(i){cells.forEach((c,j)=>{c.classList.remove('selected');if(i===j||Math.floor(i/9)===Math.floor(j/9)||i%9===j%9||Math.floor(i/27)===Math.floor(j/27)&&Math.floor(i/3)%3===Math.floor(j/3)%3)c.classList.add('selected')})}
+function snapshot(){return cells.map(c=>c.value)}
+function restore(s){cells.forEach((c,i)=>c.value=s[i]);highlightPeers(selected)}
+function pushUndo(){undoStack.push(snapshot());if(undoStack.length>100)undoStack.shift();redoStack=[]}
+function setNumber(n){if(selected===null||cells[selected].classList.contains('given'))return;if(notesMode){toggleNote(n);return}pushUndo();cells[selected].value=n;cells[selected].dispatchEvent(new Event('input'));cells[selected].focus()}
+function toggleNote(n){const cell=cells[selected];const notes=cell.dataset.notes?cell.dataset.notes.split(''):[];const s=String(n);if(notes.includes(s))notes.splice(notes.indexOf(s),1);else notes.push(s);cell.dataset.notes=notes.sort().join('');cell.placeholder=notes.join('·')||'';message.textContent=notes.length?`✎ Notes: ${notes.join(', ')}`:'Notes cleared.'}
+document.addEventListener('keydown',e=>{if(selected===null||paused)return;if(e.key>='1'&&e.key<='9'){e.preventDefault();setNumber(Number(e.key))}if(e.key==='Backspace'||e.key==='Delete'){if(!cells[selected].classList.contains('given')){pushUndo();cells[selected].value='';cells[selected].placeholder=''}}const r=Math.floor(selected/9),c=selected%9;let nr=r,nc=c;if(e.key==='ArrowUp')nr=Math.max(0,r-1);if(e.key==='ArrowDown')nr=Math.min(8,r+1);if(e.key==='ArrowLeft')nc=Math.max(0,c-1);if(e.key==='ArrowRight')nc=Math.min(8,c+1);const next=nr*9+nc;if(next!==selected){e.preventDefault();cells[next].focus()}});
+function playerLevel(){return Math.floor(xp/100)+1}function updateXP(){const lv=playerLevel(),base=(lv-1)*100,progress=xp-base;document.getElementById('xpBar').style.width=`${progress}%`;document.getElementById('xpText').textContent=`Level ${lv} · ${xp} XP`}
+function updateStats(){document.getElementById('timer').textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;document.getElementById('score').textContent=score;document.getElementById('streak').textContent=streak;document.getElementById('hints').textContent=hints;updateXP()}
+function startTimer(){clearInterval(timerId);timerId=setInterval(()=>{if(gameActive&&!paused){seconds++;updateStats()}},1000)}
+async function newGame(){gameActive=false;paused=false;dailyMode=false;document.getElementById('pauseOverlay').classList.remove('show');message.textContent='Generating puzzle...';try{const res=await fetch(`/generate?level=${level}`);const data=await res.json();initial=data.puzzle;solution=null;score=0;hints=3;undoStack=[];redoStack=[];notesMode=false;document.getElementById('notes').textContent='✎ Notes: Off';render(initial,true);await getSolution();gameActive=true;startTimer();setLevelLabel();message.textContent='Good luck! Fill the board and have fun. 🔥';updateStats()}catch(e){message.textContent='Could not generate puzzle. Is the Go server running?';}}
+async function dailyChallenge(){dailyMode=true;level='medium';document.querySelectorAll('.difficulty-btn').forEach(x=>x.classList.toggle('active',x.dataset.level==='medium'));await newGame();dailyMode=true;message.textContent='📅 Daily Challenge: beat today’s puzzle and earn bonus XP!';}
+function setLevelLabel(){document.getElementById('levelLabel').textContent=dailyMode?'Daily':level==='difficult'?'Hard':level[0].toUpperCase()+level.slice(1)}
+async function getSolution(){const rows=initial.map(row=>row.map(v=>v||'.').join(''));const res=await fetch('/solve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})});const data=await res.json();if(data.solved)solution=data.board}
+function render(puzzle,given){puzzle.forEach((row,r)=>row.forEach((v,c)=>{const cell=cells[r*9+c];cell.value=v||'';cell.dataset.notes='';cell.placeholder='';cell.classList.toggle('given',given&&v!==0);cell.classList.remove('error','selected')}))}
+function checkBoard(){if(!solution)return;let wrong=0;cells.forEach((cell,i)=>{cell.classList.remove('error');if(cell.value&&Number(cell.value)!==solution[Math.floor(i/9)][i%9]){cell.classList.add('error');wrong++}});message.textContent=wrong?`❌ ${wrong} incorrect cell${wrong>1?'s':''}. Keep going!`:'✅ Everything entered so far is correct!';if(wrong)score=Math.max(0,score-wrong*3);else score+=10;updateStats()}
+function checkCompletion(){if(!solution||paused)return;const done=cells.every((c,i)=>Number(c.value)===solution[Math.floor(i/9)][i%9]);if(done){gameActive=false;clearInterval(timerId);streak++;localStorage.sudokuStreak=streak;const bonus=Math.max(50,500-seconds*2)+(dailyMode?200:0);score+=bonus;xp+=dailyMode?150:100;localStorage.sudokuXP=xp;message.textContent=`🎉 Puzzle complete! Final score: ${score} · +${dailyMode?150:100} XP`;document.getElementById('achievementList').innerHTML='<span>🏆 First Win unlocked!</span><span>⚡ '+(seconds<180?'Speed Demon unlocked!':'Speed Demon — keep practicing')+'</span><span>🌟 Perfect Game unlocked!</span>';cells.forEach(c=>c.classList.add('selected'));updateStats()}}
+document.getElementById('check').onclick=checkBoard;
+document.getElementById('hint').onclick=()=>{if(!solution||hints<=0)return message.textContent='No hints left for this puzzle.';const empty=cells.map((c,i)=>c.value?'':i).filter(i=>i!=='');if(!empty.length)return checkCompletion();const i=empty[Math.floor(Math.random()*empty.length)];pushUndo();cells[i].value=solution[Math.floor(i/9)][i%9];cells[i].classList.add('selected');hints--;score=Math.max(0,score-15);message.textContent='💡 Hint used — nice move!';updateStats();checkCompletion()};
+document.getElementById('solve').onclick=()=>{if(!solution)return;cells.forEach((c,i)=>c.value=solution[Math.floor(i/9)][i%9]);gameActive=false;clearInterval(timerId);message.textContent='🧠 Solved! Try a new puzzle to beat your score.'};
+document.getElementById('reset').onclick=()=>{if(initial){render(initial,true);score=0;hints=3;seconds=0;gameActive=true;paused=false;undoStack=[];redoStack=[];document.getElementById('pauseOverlay').classList.remove('show');startTimer();message.textContent='↻ Board reset. Give it another shot!';updateStats()}};
+document.getElementById('newGame').onclick=newGame;
+document.querySelectorAll('.difficulty-btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('.difficulty-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');level=b.dataset.level;newGame()});
+document.getElementById('undo').onclick=()=>{if(!undoStack.length)return message.textContent='Nothing to undo.';redoStack.push(snapshot());restore(undoStack.pop());message.textContent='↶ Move undone.'};
+document.getElementById('redo').onclick=()=>{if(!redoStack.length)return message.textContent='Nothing to redo.';undoStack.push(snapshot());restore(redoStack.pop());message.textContent='↷ Move restored.'};
+document.getElementById('notes').onclick=()=>{notesMode=!notesMode;document.getElementById('notes').textContent=`✎ Notes: ${notesMode?'On':'Off'}`;document.getElementById('notes').classList.toggle('active',notesMode);message.textContent=notesMode?'✎ Notes mode enabled. Add candidate numbers.':'Notes mode disabled.'};
+document.getElementById('pause').onclick=()=>{if(!gameActive)return;paused=true;document.getElementById('pauseOverlay').classList.add('show')};document.getElementById('resume').onclick=()=>{paused=false;document.getElementById('pauseOverlay').classList.remove('show');message.textContent='▶ Back to the puzzle!'};
+document.getElementById('dailyChallenge').onclick=dailyChallenge;
+document.getElementById('themeToggle').onclick=()=>{document.body.classList.toggle('light');document.getElementById('themeToggle').textContent=document.body.classList.contains('light')?'☀️':'🌙';localStorage.sudokuTheme=document.body.classList.contains('light')?'light':'dark'};
+if(localStorage.sudokuTheme==='light'){document.body.classList.add('light');document.getElementById('themeToggle').textContent='☀️'}
+updateStats();newGame();
