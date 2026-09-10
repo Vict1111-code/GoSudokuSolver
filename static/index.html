@@ -2,22 +2,66 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Go Sudoku Solver</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1020">
+  <title>Sudoku Quest — Go Sudoku</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Go Sudoku Solver</h1>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-icon">🧩</span><div><strong>Sudoku Quest</strong><small>Go Sudoku Solver</small></div></div>
+      <button id="themeToggle" class="icon-btn" aria-label="Toggle theme">🌙</button>
+    </header>
 
-  <div id="board"></div>
+    <main>
+      <section class="hero">
+        <div>
+          <span class="eyebrow">DAILY BRAIN TRAINING</span>
+          <h1>Think. Place. <span>Conquer.</span></h1>
+          <p>Challenge yourself, beat the clock, and build your Sudoku streak.</p>
+        </div>
+        <div class="level-badge"><span>LEVEL</span><strong id="levelLabel">Easy</strong></div>
+      </section>
 
-  <div class="buttons">
-    <button id="solve">Solve</button>
-    <button id="generate">Generate</button>
-    <button id="reset">Reset</button>
+      <section class="stats">
+        <div><span>⏱️ TIME</span><strong id="timer">00:00</strong></div>
+        <div><span>🏆 SCORE</span><strong id="score">0</strong></div>
+        <div><span>🔥 STREAK</span><strong id="streak">0</strong></div>
+        <div><span>💡 HINTS</span><strong id="hints">3</strong></div>
+      </section>
+
+      <section class="game-layout">
+        <div class="game-card">
+          <div class="game-head">
+            <div><h2>Sudoku Board</h2><p id="message">Choose a difficulty and start a puzzle.</p></div>
+            <div class="difficulty">
+              <button class="difficulty-btn active" data-level="easy">Easy</button>
+              <button class="difficulty-btn" data-level="medium">Medium</button>
+              <button class="difficulty-btn" data-level="difficult">Hard</button>
+            </div>
+          </div>
+          <div id="board" aria-label="Sudoku board"></div>
+          <div id="numberPad" class="number-pad"></div>
+          <div class="actions">
+            <button id="newGame" class="primary">✨ New Game</button>
+            <button id="check">✓ Check</button>
+            <button id="hint">💡 Hint</button>
+            <button id="solve">🧠 Solve</button>
+            <button id="reset">↻ Reset</button>
+          </div>
+        </div>
+
+        <aside class="side-card">
+          <h3>🎯 How to play</h3>
+          <ol><li>Fill every empty cell.</li><li>Each row needs 1–9 once.</li><li>Each column needs 1–9 once.</li><li>Each 3×3 box needs 1–9 once.</li></ol>
+          <div class="tip"><strong>Pro tip</strong><br>Use notes mentally and start with the rows or boxes that have the most numbers filled in.</div>
+          <div class="achievements"><h3>🏅 Achievements</h3><div id="achievementList"><span>🔒 First Win</span><span>🔒 Speed Demon</span><span>🔒 Perfect Game</span></div></div>
+        </aside>
+      </section>
+    </main>
+    <footer>Built with Go + HTML + CSS + JavaScript · <span>Keep your brain sharp 🧠</span></footer>
   </div>
-
-  <p id="message"></p>
-
   <script src="app.js"></script>
 </body>
 </html>
