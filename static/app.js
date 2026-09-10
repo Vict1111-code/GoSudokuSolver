@@ -1,62 +1,27 @@
-const boardDiv = document.getElementById("board");
-const message = document.getElementById("message");
-
-for (let i = 0; i < 81; i++) {
-  const input = document.createElement("input");
-  input.maxLength = 1;
-  boardDiv.appendChild(input);
-}
-
-document.getElementById("solve").onclick = async () => {
-  const rows = [];
-  for (let r = 0; r < 9; r++) {
-    let row = "";
-    for (let c = 0; c < 9; c++) {
-      const val = boardDiv.children[r * 9 + c].value.trim();
-      row += val === "" ? "." : val;
-    }
-    rows.push(row);
-  }
-
-  message.textContent = "Solving...";
-
-  const res = await fetch("/solve", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rows }),
-  });
-
-  const data = await res.json();
-
-  if (data.solved) {
-    message.textContent = "✅ Solved!";
-    const solvedBoard = data.board;
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        boardDiv.children[r * 9 + c].value = solvedBoard[r][c];
-      }
-    }
-  } else {
-    message.textContent = "❌ " + data.error;
-  }
-};
-
-document.getElementById("reset").onclick = () => {
-  [...boardDiv.children].forEach(input => input.value = "");
-  message.textContent = "";
-};
-
-document.getElementById("generate").onclick = async () => {
-  message.textContent = "Generating puzzle...";
-  const res = await fetch("/generate");
-  const data = await res.json();
-
-  const puzzle = data.puzzle;
-  for (let r = 0; r < 9; r++) {
-    for (let c = 0; c < 9; c++) {
-      const cell = boardDiv.children[r * 9 + c];
-      cell.value = puzzle[r][c] === 0 ? "" : puzzle[r][c];
-    }
-  }
-  message.textContent = "🧩 Puzzle generated!";
-};
+const boardDiv=document.getElementById('board'),message=document.getElementById('message');
+let level='easy',seconds=0,timerId=null,score=0,hints=3,streak=Number(localStorage.sudokuStreak||0),solution=null,initial=null,selected=null,gameActive=false;
+const cells=[];
+for(let i=0;i<81;i++){const input=document.createElement('input');input.className='cell';input.maxLength=1;input.inputMode='numeric';input.dataset.index=i;input.setAttribute('aria-label',`Row ${Math.floor(i/9)+1}, Column ${(i%9)+1}`);boardDiv.appendChild(input);cells.push(input);input.addEventListener('focus',()=>selectCell(i));input.addEventListener('input',()=>{input.value=input.value.replace(/[^1-9]/g,'').slice(0,1);highlightPeers(i);if(input.value)score=Math.max(0,score+2);updateStats();checkCompletion();});}
+const pad=document.getElementById('numberPad');for(let n=1;n<=9;n++){const b=document.createElement('button');b.textContent=n;b.onclick=()=>selected!==null&&setNumber(n);pad.appendChild(b)}
+function selectCell(i){selected=i;highlightPeers(i)}
+function highlightPeers(i){cells.forEach((c,j)=>{c.classList.remove('selected');if(i===j||Math.floor(i/9)===Math.floor(j/9)||i%9===j%9||Math.floor(i/27)===Math.floor(j/27)&&Math.floor(i/3)%3===Math.floor(j/3)%3)c.classList.add('selected')});if(i!==null)cells[i].classList.add('selected')}
+function setNumber(n){if(selected===null||cells[selected].classList.contains('given'))return;cells[selected].value=n;cells[selected].dispatchEvent(new Event('input'));cells[selected].focus()}
+document.addEventListener('keydown',e=>{if(selected===null)return;if(e.key>='1'&&e.key<='9')setNumber(Number(e.key));if(e.key==='Backspace'||e.key==='Delete'){if(!cells[selected].classList.contains('given'))cells[selected].value='';}const r=Math.floor(selected/9),c=selected%9;let nr=r,nc=c;if(e.key==='ArrowUp')nr=Math.max(0,r-1);if(e.key==='ArrowDown')nr=Math.min(8,r+1);if(e.key==='ArrowLeft')nc=Math.max(0,c-1);if(e.key==='ArrowRight')nc=Math.min(8,c+1);const next=nr*9+nc;if(next!==selected){e.preventDefault();cells[next].focus()}});
+function updateStats(){document.getElementById('timer').textContent=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;document.getElementById('score').textContent=score;document.getElementById('streak').textContent=streak;document.getElementById('hints').textContent=hints}
+function startTimer(){clearInterval(timerId);seconds=0;timerId=setInterval(()=>{if(gameActive){seconds++;updateStats()}},1000)}
+async function newGame(){gameActive=false;message.textContent='Generating puzzle...';try{const res=await fetch(`/generate?level=${level}`);const data=await res.json();initial=data.puzzle;solution=null;score=0;hints=3;render(initial,true);await getSolution();gameActive=true;startTimer();document.getElementById('levelLabel').textContent=level==='difficult'?'Hard':level[0].toUpperCase()+level.slice(1);message.textContent='Good luck! Fill the board and have fun. 🔥';updateStats()}catch(e){message.textContent='Could not generate puzzle. Is the Go server running?';}}
+async function getSolution(){const rows=initial.map(row=>row.map(v=>v||'.').join(''));const res=await fetch('/solve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows})});const data=await res.json();if(data.solved)solution=data.board}
+function render(puzzle,given){puzzle.forEach((row,r)=>row.forEach((v,c)=>{const cell=cells[r*9+c];cell.value=v||'';cell.classList.toggle('given',given&&v!==0);cell.classList.remove('error','selected')}))}
+function currentBoard(){return cells.map(c=>Number(c.value)||0).reduce((a,v,i)=>(a[Math.floor(i/9)][i%9]=v,a),Array.from({length:9},()=>Array(9).fill(0)))}
+function validBoard(b){for(let r=0;r<9;r++)for(let c=0;c<9;c++){const n=b[r][c];if(!n)continue;b[r][c]=0;let ok=!b[r].some(x=>x===n)&&!b.some(x=>x[c]===n)&&![0,1,2].some(z=>b[Math.floor(r/3)*3+z].slice(Math.floor(c/3)*3,Math.floor(c/3)*3+3).includes(n));b[r][c]=n;if(!ok)return false}return true}
+function checkBoard(){if(!solution)return;let wrong=0;cells.forEach((cell,i)=>{cell.classList.remove('error');if(cell.value&&Number(cell.value)!==solution[Math.floor(i/9)][i%9]){cell.classList.add('error');wrong++}});message.textContent=wrong?`❌ ${wrong} incorrect cell${wrong>1?'s':''}. Keep going!`:'✅ Everything entered so far is correct!';if(wrong)score=Math.max(0,score-wrong*3);else score+=10;updateStats()}
+function checkCompletion(){if(!solution)return;const done=cells.every((c,i)=>Number(c.value)===solution[Math.floor(i/9)][i%9]);if(done){gameActive=false;clearInterval(timerId);streak++;localStorage.sudokuStreak=streak;score+=Math.max(50,500-seconds*2);message.textContent=`🎉 Puzzle complete! Final score: ${score}`;cells.forEach(c=>c.classList.add('selected'));document.getElementById('achievementList').innerHTML='<span>🏆 First Win unlocked!</span><span>⚡ '+(seconds<180?'Speed Demon unlocked!':'Speed Demon — keep practicing')</span><span>🌟 Perfect Game unlocked!</span>';updateStats()}}
+document.getElementById('check').onclick=checkBoard;
+document.getElementById('hint').onclick=()=>{if(!solution||hints<=0)return message.textContent='No hints left for this puzzle.';const empty=cells.map((c,i)=>c.value?'':i).filter(i=>i!=='');if(!empty.length)return checkCompletion();const i=empty[Math.floor(Math.random()*empty.length)];cells[i].value=solution[Math.floor(i/9)][i%9];cells[i].classList.add('selected');hints--;score=Math.max(0,score-15);message.textContent='💡 Hint used — nice move!';updateStats();checkCompletion()};
+document.getElementById('solve').onclick=()=>{if(!solution)return;cells.forEach((c,i)=>c.value=solution[Math.floor(i/9)][i%9]);gameActive=false;clearInterval(timerId);message.textContent='🧠 Solved! Try a new puzzle to beat your score.'};
+document.getElementById('reset').onclick=()=>{if(initial){render(initial,true);score=0;hints=3;seconds=0;gameActive=true;startTimer();message.textContent='↻ Board reset. Give it another shot!';updateStats()}};
+document.getElementById('newGame').onclick=newGame;
+document.querySelectorAll('.difficulty-btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('.difficulty-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');level=b.dataset.level;newGame()});
+document.getElementById('themeToggle').onclick=()=>{document.body.classList.toggle('light');document.getElementById('themeToggle').textContent=document.body.classList.contains('light')?'☀️':'🌙';localStorage.sudokuTheme=document.body.classList.contains('light')?'light':'dark'};
+if(localStorage.sudokuTheme==='light'){document.body.classList.add('light');document.getElementById('themeToggle').textContent='☀️'}
+updateStats();newGame();
