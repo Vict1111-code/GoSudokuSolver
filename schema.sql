@@ -1,0 +1,29 @@
+CREATE DATABASE IF NOT EXISTS sudoku_quest CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE sudoku_quest;
+
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    username VARCHAR(30) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    xp INT UNSIGNED NOT NULL DEFAULT 0,
+    level INT UNSIGNED NOT NULL DEFAULT 1,
+    streak INT UNSIGNED NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_users_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS leaderboard_runs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    username VARCHAR(30) NOT NULL,
+    score INT NOT NULL DEFAULT 0,
+    seconds INT UNSIGNED NOT NULL DEFAULT 0,
+    difficulty VARCHAR(20) NOT NULL,
+    mode VARCHAR(20) NOT NULL DEFAULT 'standard',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_runs_score (score),
+    KEY idx_runs_user (user_id),
+    CONSTRAINT fk_runs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
