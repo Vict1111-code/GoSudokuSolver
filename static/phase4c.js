@@ -1,66 +1,10 @@
-const COMPETITIVE_FUNCTION = 'sudoku-competitive';
-let competitiveSessionId = null;
-let competitiveStarting = false;
-let competitiveVerifying = false;
-let lastPuzzleSignature = '';
-
-function phase4cUser(){ return window.SudokuAuth?.getUser?.() || null; }
-function phase4cPuzzle(){
-  const cells=[...document.querySelectorAll('#board .cell')]; const rows=[];
-  for(let r=0;r<9;r++) rows.push(cells.slice(r*9,r*9+9).map(c=>c.classList.contains('given')&&c.value?c.value:'.').join(''));
-  return rows;
-}
-function phase4cBoard(){
-  const cells=[...document.querySelectorAll('#board .cell')]; const rows=[];
-  for(let r=0;r<9;r++) rows.push(cells.slice(r*9,r*9+9).map(c=>c.value||'.').join(''));
-  return rows;
-}
-function phase4cComplete(board){ return board.length===9 && board.every(r=>r.length===9&&/^[1-9]{9}$/.test(r)); }
-async function phase4cStart(mode,difficulty,date=''){
-  const user=phase4cUser(); if(!user||competitiveStarting)return;
-  const puzzle=phase4cPuzzle(); if(puzzle.join('').replace(/\./g,'').length<17)return;
-  const sig=`${mode}|${difficulty}|${date}|${puzzle.join('')}`; if(sig===lastPuzzleSignature&&competitiveSessionId)return;
-  competitiveStarting=true;
-  try{
-    const payload={action:'start',mode,difficulty,puzzle}; if(mode==='daily')payload.date=date;
-    const {data,error}=await window.SudokuAuth.supabase.functions.invoke(COMPETITIVE_FUNCTION,{body:payload});
-    if(error)throw error;
-    competitiveSessionId=data.session_id; lastPuzzleSignature=sig; sessionStorage.setItem('sudokuCompetitiveSession',competitiveSessionId);
-    document.getElementById('message').textContent='🛡️ Server-validated competitive session started.';
-  }catch(e){console.error('Phase 4C start failed',e);competitiveSessionId=null;document.getElementById('message').textContent='⚠️ Online validation unavailable. This game remains local.';}
-  finally{competitiveStarting=false;}
-}
-async function phase4cVerify(){
-  if(!competitiveSessionId||competitiveVerifying)return;
-  const board=phase4cBoard(); if(!phase4cComplete(board))return;
-  competitiveVerifying=true;
-  try{
-    const {data,error}=await window.SudokuAuth.supabase.functions.invoke(COMPETITIVE_FUNCTION,{body:{action:'verify',session_id:competitiveSessionId,board,client_score:Number(document.getElementById('score')?.textContent||0)}});
-    if(error)throw error; if(!data?.verified)throw new Error('Server did not verify this run');
-    const score=Number(data.score||0),xp=Number(data.xp_earned||0);
-    document.getElementById('victoryScore').textContent=score;
-    document.getElementById('victoryTime').textContent=fmt(data.elapsed_seconds||0);
-    document.getElementById('victoryXP').textContent=`+${xp}`;
-    document.getElementById('victoryMessage').textContent=`🛡️ Verified by server · ${data.mode==='daily'?'Daily Challenge':data.mode==='speed_run'?'Speed Run':'Competitive'}`;
-    document.getElementById('victoryOverlay')?.classList.add('show');
-    document.getElementById('message').textContent='🏆 Server verified your win!';
-    document.getElementById('score').textContent=score;
-    competitiveSessionId=null; sessionStorage.removeItem('sudokuCompetitiveSession');
-    const {data:profile}=await window.SudokuAuth.supabase.from('profiles').select('*').eq('id',phase4cUser().id).maybeSingle();
-    if(profile){localStorage.sudokuXP=String(profile.xp);localStorage.sudokuStreak=String(profile.current_streak);window.dispatchEvent(new CustomEvent('sudoku:server-profile',{detail:profile}));}
-  }catch(e){console.error('Phase 4C verification failed',e);document.getElementById('message').textContent='❌ Server could not verify this completion. No online score was recorded.';}
-  finally{competitiveVerifying=false;}
-}
-function phase4cInstall(){
-  const watch=(selector,handler)=>document.querySelectorAll(selector).forEach(el=>el.addEventListener('click',handler));
-  watch('#newGame',()=>setTimeout(()=>phase4cStart('classic',document.querySelector('.difficulty-btn.active')?.dataset.level||'easy'),900));
-  watch('#dailyChallenge',()=>setTimeout(()=>phase4cStart('daily','medium',new Date().toISOString().slice(0,10)),900));
-  watch('#speedRun',()=>setTimeout(()=>phase4cStart('speed_run','medium'),900));
-  watch('.difficulty-btn',e=>setTimeout(()=>phase4cStart('classic',e.currentTarget.dataset.level||'easy'),900));
-  document.addEventListener('input',e=>{
-    if(!e.target.matches('#board .cell')||!competitiveSessionId)return;
-    const b=phase4cBoard(); if(phase4cComplete(b)){e.stopImmediatePropagation();phase4cVerify();}
-  },true);
-  const saved=sessionStorage.getItem('sudokuCompetitiveSession'); if(saved)competitiveSessionId=saved;
-}
-const phase4cBoot=setInterval(()=>{if(window.SudokuAuth?.supabase){clearInterval(phase4cBoot);phase4cInstall();}},250);
+const COMPETITIVE_FUNCTION='sudoku-competitive';
+let competitiveSessionId=null,competitiveStarting=false,competitiveVerifying=false;
+function phase4dUser(){return window.SudokuAuth?.getUser?.()||null}
+function phase4dBoard(){const cells=[...document.querySelectorAll('#board .cell')],rows=[];for(let r=0;r<9;r++)rows.push(cells.slice(r*9,r*9+9).map(c=>c.value||'.').join(''));return rows}
+function phase4dComplete(b){return b.length===9&&b.every(r=>r.length===9&&/^[1-9]{9}$/.test(r))}
+function phase4dResetSession(){competitiveSessionId=null;sessionStorage.removeItem('sudokuCompetitiveSession')}
+async function phase4dStart(mode,difficulty){const user=phase4dUser();if(!user||competitiveStarting)return false;competitiveStarting=true;try{clearInterval(timerId);gameActive=false;paused=false;document.getElementById('pauseOverlay')?.classList.remove('show');message.textContent='🛡️ Server is generating your unique puzzle...';const{data,error}=await window.SudokuAuth.supabase.functions.invoke(COMPETITIVE_FUNCTION,{body:{action:'start',mode,difficulty}});if(error)throw error;if(!data?.session_id||!Array.isArray(data.puzzle))throw new Error('Invalid server response');competitiveSessionId=data.session_id;sessionStorage.setItem('sudokuCompetitiveSession',competitiveSessionId);level=data.difficulty||difficulty;dailyMode=data.mode==='daily';speedRunMode=data.mode==='speed_run';dailyDate=data.mode==='daily'?new Date().toISOString().slice(0,10):'';initial=data.puzzle;solution=null;score=0;hints=3;seconds=0;speedRunRemaining=speedRunLimit;mistakesThisGame=0;hintsThisGame=0;undoStack=[];redoStack=[];notesMode=false;document.getElementById('notes').textContent='✎ Notes: Off';render(initial,true);await getSolution();if(!solution)throw new Error('Could not load puzzle solution');gameActive=true;startTimer();setLevelLabel();updateStats();clearSave();message.textContent=data.mode==='daily'?`📅 Daily Challenge · ${dailyDate} · Server puzzle`:`🛡️ ${level[0].toUpperCase()+level.slice(1)} · Server-generated unique puzzle`;return true}catch(e){console.error('Phase 4D start failed',e);phase4dResetSession();message.textContent='⚠️ Online game could not start. You can continue using local games.';return false}finally{competitiveStarting=false}}
+async function phase4dVerify(){if(!competitiveSessionId||competitiveVerifying)return;const board=phase4dBoard();if(!phase4dComplete(board))return;competitiveVerifying=true;try{const{data,error}=await window.SudokuAuth.supabase.functions.invoke(COMPETITIVE_FUNCTION,{body:{action:'verify',session_id:competitiveSessionId,board}});if(error)throw error;if(!data?.verified)throw new Error('Server did not verify this run');const scoreValue=Number(data.score||0),xpValue=Number(data.xp_earned||0);document.getElementById('victoryScore').textContent=scoreValue;document.getElementById('victoryTime').textContent=fmt(data.elapsed_seconds||0);document.getElementById('victoryXP').textContent=`+${xpValue}`;document.getElementById('victoryMessage').textContent=`🛡️ Verified by server · ${data.mode==='daily'?'Daily Challenge':data.mode==='speed_run'?'Speed Run':'Competitive'}`;document.getElementById('victoryOverlay')?.classList.add('show');document.getElementById('message').textContent='🏆 Server verified your win!';document.getElementById('score').textContent=scoreValue;competitiveSessionId=null;sessionStorage.removeItem('sudokuCompetitiveSession');const{data:profile}=await window.SudokuAuth.supabase.from('profiles').select('*').eq('id',phase4dUser().id).maybeSingle();if(profile){localStorage.sudokuXP=String(profile.xp);localStorage.sudokuStreak=String(profile.current_streak);xp=Number(profile.xp||xp);streak=Number(profile.current_streak||streak);updateXP()}}catch(e){console.error('Phase 4D verification failed',e);message.textContent='❌ Server rejected this completion. No online score was recorded.'}finally{competitiveVerifying=false}}
+function phase4dIntercept(){if(window.__phase4dInstalled)return;window.__phase4dInstalled=true;document.addEventListener('click',async e=>{const t=e.target.closest?.('#newGame,#dailyChallenge,#speedRun,.difficulty-btn');if(!t)return;const user=phase4dUser();if(!user)return;e.preventDefault();e.stopImmediatePropagation();if(t.id==='dailyChallenge'){await phase4dStart('daily','medium');return}if(t.id==='speedRun'){await phase4dStart('speed_run','medium');return}const d=t.dataset.level||level||'easy';await phase4dStart('classic',d)},true);document.addEventListener('input',e=>{if(!e.target.matches('#board .cell')||!competitiveSessionId)return;const b=phase4dBoard();if(phase4dComplete(b)){e.stopImmediatePropagation();phase4dVerify()}},true);const saved=sessionStorage.getItem('sudokuCompetitiveSession');if(saved)competitiveSessionId=saved}
+const phase4dBoot=setInterval(()=>{if(window.SudokuAuth?.supabase){clearInterval(phase4dBoot);phase4dIntercept()}},250);
