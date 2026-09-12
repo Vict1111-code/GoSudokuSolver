@@ -1,7 +1,7 @@
 package main
 
 import (
-    "crypto/rand"
+    crand "crypto/rand"
     "database/sql"
     "encoding/hex"
     "encoding/json"
@@ -76,7 +76,7 @@ func (a *App) loginHandler(w http.ResponseWriter, r *http.Request) {
     a.createSession(w,id);jsonResponse(w,200,map[string]any{"ok":true,"username":req.Username})
 }
 
-func (a *App) createSession(w http.ResponseWriter,id int64){b:=make([]byte,32);if _,err:=rand.Read(b);err!=nil{return};token:=hex.EncodeToString(b);a.sessionMu.Lock();a.sessions[token]=id;a.sessionMu.Unlock();http.SetCookie(w,&http.Cookie{Name:"sudoku_session",Value:token,Path:"/",HttpOnly:true,SameSite:http.SameSiteLaxMode,MaxAge:86400*30})}
+func (a *App) createSession(w http.ResponseWriter,id int64){b:=make([]byte,32);if _,err:=crand.Read(b);err!=nil{return};token:=hex.EncodeToString(b);a.sessionMu.Lock();a.sessions[token]=id;a.sessionMu.Unlock();http.SetCookie(w,&http.Cookie{Name:"sudoku_session",Value:token,Path:"/",HttpOnly:true,SameSite:http.SameSiteLaxMode,MaxAge:86400*30})}
 func (a *App) userID(r *http.Request)(int64,bool){c,err:=r.Cookie("sudoku_session");if err!=nil{return 0,false};a.sessionMu.RLock();id,ok:=a.sessions[c.Value];a.sessionMu.RUnlock();return id,ok}
 func (a *App) logoutHandler(w http.ResponseWriter,r *http.Request){if c,err:=r.Cookie("sudoku_session");err==nil{a.sessionMu.Lock();delete(a.sessions,c.Value);a.sessionMu.Unlock()};http.SetCookie(w,&http.Cookie{Name:"sudoku_session",Value:"",Path:"/",MaxAge:-1,HttpOnly:true});jsonResponse(w,200,map[string]any{"ok":true})}
 func (a *App) meHandler(w http.ResponseWriter,r *http.Request){id,ok:=a.userID(r);if !ok||a.db==nil{jsonResponse(w,200,map[string]any{"authenticated":false});return};var username string;var xp,level,streak int;err:=a.db.QueryRow("SELECT username,xp,level,streak FROM users WHERE id=?",id).Scan(&username,&xp,&level,&streak);if err!=nil{jsonResponse(w,200,map[string]any{"authenticated":false});return};jsonResponse(w,200,map[string]any{"authenticated":true,"username":username,"xp":xp,"level":level,"streak":streak})}
